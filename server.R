@@ -437,6 +437,970 @@ server <- function(input, output) {
         ggplotly(smooth_graph_all())
     )
     
+    # Calculating growth rate inputs
+    
+    interval_choices <- reactive(if(is.null(Raspi_unique())){return(NULL)}else{
+        if(input$expType == "PhenoRig"){
+            interval_list <- c("3 hours", "6 hours", "day", "2 days")
+        }
+        if(input$expType == "PhenoCage"){
+            interval_list <- c("6 days", "8 days", "10 days")
+        }
+        return(interval_list)
+    })
+    
+    output$interval <- renderUI({
+        if(is.null(Raspi_unique()) | input$GrowthType == "Over whole experiment"){return(NULL)}else{
+            tagList(selectizeInput(
+                inputId = "GrowthInterval",
+                label = "Calculate growth rate for every:",
+                choices = interval_choices(),
+                multiple=F
+            ))
+            
+        }
+    })
+    
+    step_choices <- reactive(if(is.null(Raspi_unique())){return(NULL)}else{
+        if(input$expType == "PhenoRig"){
+            interval_list <- c("1 h", "6 h", "12 h", "24 h")
+        }
+        if(input$expType == "PhenoCage"){
+            interval_list <- c("2 days", "4 days", "6 days")
+        }
+        return(interval_list)
+    })
+    
+    
+    output$step <- renderUI({
+        if(is.null(Raspi_unique()) | input$GrowthType == "Over whole experiment"){return(NULL)}else{
+            tagList(selectizeInput(
+                inputId = "step_size",
+                label = "Calculate growth rate with step size every:",
+                choices = step_choices(),
+                multiple=F
+            ))
+        }
+    })
+    
+    
+    
+    Growth_rate_table <- reactive(if(input$GoGrowth == FALSE){return(NULL)}else{
+        if(input$GrowthType == "Step-wise"){
+            if(input$dataGrowth == "Original data"){
+                my_data <- Raspi_unique()
+                if(input$expType == "PhenoRig"){
+                    # isolate 1st plant 
+                    all_plants <- unique(my_data$Plant.ID)
+                    my_data$time.min <- as.numeric(as.character(my_data$time.min))
+                    temp <- subset(my_data, my_data$Plant.ID == all_plants[1])
+                    # isolate first time interval
+                    min_time <- min(my_data$time.min)
+                    max_time <- max(my_data$time.min)
+                    if(input$step_size == "1 h"){step_time <- 60}
+                    if(input$step_size == "6 h"){step_time <- 60*6}
+                    if(input$step_size == "24 h"){step_time <- 60*24}
+                    growth_timeline <- seq(min_time, max_time, by=step_time)
+                    growth_timeline <- growth_timeline[-length(growth_timeline)]
+                    if(input$GrowthInterval == "3 hours"){
+                        temp_now <- subset(temp, temp$time.min < 180)
+                        temp_now$area.spl <- as.numeric(temp_now$area.spl)
+                        temp_now$time.min <- as.numeric(temp_now$time.min)
+                        model_now <- lm(temp_now$area ~ temp_now$time.min)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        names <- c(text="Plant.ID", "min", "GR", "R2")
+                        growth_data <- data.frame()
+                        for (k in names) growth_data[[k]] <- as.character()
+                        growth_data
+                        growth_data[1,1] <- temp_now$Plant.ID[1]
+                        growth_data[1,2] <- min(temp_now$time.min)
+                        growth_data[1,3] <- GR
+                        growth_data[1,4] <- R2
+                        for(t in 2:length(growth_timeline)){
+                            min = growth_timeline[t]
+                            max = min + 180
+                            temp_now <- subset(temp, temp$time.min < max)
+                            temp_now <- subset(temp_now, temp_now$time.min >= min)
+                            temp_now$area.spl <- as.numeric(temp_now$area.spl)
+                            temp_now$time.min <- as.numeric(temp_now$time.min)
+                            if(dim(temp_now)[1]>3){
+                            model_now <- lm(temp_now$area ~ temp_now$time.min)
+                            growth_data[t,1] <- temp_now$Plant.ID[1]
+                            growth_data[t,2] <- min(temp_now$time.min)
+                            growth_data[t,3] <- GR
+                            growth_data[t,4] <- R2}}
+                        counter = t + 1
+                        for(r in 2:length(all_plants)){
+                            temp <- subset(my_data, my_data$Plant.ID == all_plants[r])
+                            if(dim(temp)[1]>0){
+                                for(t in 1:length(growth_timeline)){
+                                    min = growth_timeline[t]
+                                    max = min + 180
+                                    temp_now <- subset(temp, temp$time.min < max)
+                                    temp_now <- subset(temp_now, temp_now$time.min >= min)
+                                    if(dim(temp_now)[1]>3){
+                                    model_now <- lm(temp_now$area ~ temp_now$time.min)
+                                    growth_data[counter,1] <- temp_now$Plant.ID[1]
+                                    growth_data[counter,2] <- min(temp_now$time.min)
+                                    growth_data[counter,3] <- model_now$coefficients[2]
+                                    growth_data[counter,4] <- summary(model_now)$r.squared
+                                    counter <- counter + 1}
+                                }}}
+                        }
+                    if(input$GrowthInterval == "6 hours"){
+                        temp_now <- subset(temp, temp$time.min < 360)
+                        model_now <- lm(temp_now$area ~ temp_now$time.min)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        names <- c(text="Plant.ID", "min", "GR", "R2")
+                        growth_data <- data.frame()
+                        for (k in names) growth_data[[k]] <- as.character()
+                        growth_data
+                        growth_data[1,1] <- temp_now$Plant.ID[1]
+                        growth_data[1,2] <- min(temp_now$time.min)
+                        growth_data[1,3] <- GR
+                        growth_data[1,4] <- R2
+                        for(t in 2:length(growth_timeline)){
+                            min = growth_timeline[t]
+                            max = min + 360
+                            temp_now <- subset(temp, temp$time.min < max)
+                            temp_now <- subset(temp_now, temp_now$time.min >= min)
+                            if(dim(temp_now)[1]>3){
+                            model_now <- lm(temp_now$area ~ temp_now$time.min)
+                            growth_data[t,1] <- temp_now$Plant.ID[1]
+                            growth_data[t,2] <- min(temp_now$time.min)
+                            growth_data[t,3] <- GR
+                            growth_data[t,4] <- R2}}
+                        counter = 1
+                        for(r in 1:length(all_plants)){
+                            temp <- subset(my_data, my_data$Plant.ID == all_plants[r])
+                            if(dim(temp)[1]>0){
+                                for(t in 1:length(growth_timeline)){
+                                    min = growth_timeline[t]
+                                    max = min + 360
+                                    temp_now <- subset(temp, temp$time.min < max)
+                                    temp_now <- subset(temp_now, temp_now$time.min >= min)
+                                    if(dim(temp_now)[1]>3){
+                                    model_now <- lm(temp_now$area ~ temp_now$time.min)
+                                    growth_data[counter,1] <- temp_now$Plant.ID[1]
+                                    growth_data[counter,2] <- min(temp_now$time.min)
+                                    growth_data[counter,3] <- model_now$coefficients[2]
+                                    growth_data[counter,4] <- summary(model_now)$r.squared
+                                    counter <- counter + 1}
+                                }}}
+                    }
+                    if(input$GrowthInterval == "day"){
+                        temp_now <- subset(temp, temp$time.min < 1440)
+                        model_now <- lm(temp_now$area ~ temp_now$time.min)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        names <- c(text="Plant.ID", "min", "GR", "R2")
+                        growth_data <- data.frame()
+                        for (k in names) growth_data[[k]] <- as.character()
+                        growth_data
+                        growth_data[1,1] <- temp_now$Plant.ID[1]
+                        growth_data[1,2] <- min(temp_now$time.min)
+                        growth_data[1,3] <- GR
+                        growth_data[1,4] <- R2
+                        for(t in 2:length(growth_timeline)){
+                            min = growth_timeline[t]
+                            max = min + 1440
+                            temp_now <- subset(temp, temp$time.min < max)
+                            temp_now <- subset(temp_now, temp_now$time.min >= min)
+                            if(dim(temp_now)[1]>3){
+                            model_now <- lm(temp_now$area ~ temp_now$time.min)
+                            growth_data[t,1] <- temp_now$Plant.ID[1]
+                            growth_data[t,2] <- min(temp_now$time.min)
+                            growth_data[t,3] <- GR
+                            growth_data[t,4] <- R2}}
+                        counter = 1
+                        for(r in 1:length(all_plants)){
+                            temp <- subset(my_data, my_data$Plant.ID == all_plants[r])
+                            if(dim(temp)[1]>0){
+                                for(t in 1:length(growth_timeline)){
+                                    min = growth_timeline[t]
+                                    max = min + 1440
+                                    temp_now <- subset(temp, temp$time.min < max)
+                                    temp_now <- subset(temp_now, temp_now$time.min >= min)
+                                    if(dim(temp_now)[1]>3){
+                                    model_now <- lm(temp_now$area ~ temp_now$time.min)
+                                    growth_data[counter,1] <- temp_now$Plant.ID[1]
+                                    growth_data[counter,2] <- min(temp_now$time.min)
+                                    growth_data[counter,3] <- model_now$coefficients[2]
+                                    growth_data[counter,4] <- summary(model_now)$r.squared
+                                    counter <- counter + 1}
+                                }}}
+                    }
+                    if(input$GrowthInterval == "2 days"){
+                        temp_now <- subset(temp, temp$time.min < 2880)
+                        model_now <- lm(temp_now$area ~ temp_now$time.min)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        names <- c(text="Plant.ID", "min", "GR", "R2")
+                        growth_data <- data.frame()
+                        for (k in names) growth_data[[k]] <- as.character()
+                        growth_data
+                        growth_data[1,1] <- temp_now$Plant.ID[1]
+                        growth_data[1,2] <- min(temp_now$time.min)
+                        growth_data[1,3] <- GR
+                        growth_data[1,4] <- R2
+                        for(t in 2:length(growth_timeline)){
+                            min = growth_timeline[t]
+                            max = min + 2880
+                            temp_now <- subset(temp, temp$time.min < max)
+                            temp_now <- subset(temp_now, temp_now$time.min >= min)
+                            if(dim(temp_now)[1]>3){
+                            model_now <- lm(temp_now$area ~ temp_now$time.min)
+                            growth_data[t,1] <- temp_now$Plant.ID[1]
+                            growth_data[t,2] <- min(temp_now$time.min)
+                            growth_data[t,3] <- GR
+                            growth_data[t,4] <- R2}}
+                        counter = 1
+                        for(r in 1:length(all_plants)){
+                            temp <- subset(my_data, my_data$Plant.ID == all_plants[r])
+                            if(dim(temp)[1]>0){
+                                for(t in 1:length(growth_timeline)){
+                                    min = growth_timeline[t]
+                                    max = min + 2880
+                                    temp_now <- subset(temp, temp$time.min < max)
+                                    temp_now <- subset(temp_now, temp_now$time.min >= min)
+                                    if(dim(temp_now)[1]>3){
+                                    model_now <- lm(temp_now$area ~ temp_now$time.min)
+                                    growth_data[counter,1] <- temp_now$Plant.ID[1]
+                                    growth_data[counter,2] <- min(temp_now$time.min)
+                                    growth_data[counter,3] <- model_now$coefficients[2]
+                                    growth_data[counter,4] <- summary(model_now)$r.squared
+                                    counter <- counter + 1}
+                                }}}
+                    }
+                }
+                if(input$expType == "PhenoCage"){
+                    # isolate 1st plant 
+                    all_plants <- unique(my_data$POT)
+                    my_data$time.days <- as.numeric(as.character(my_data$time.days))
+                    temp <- subset(my_data, my_data$POT == all_plants[1])
+                    # isolate first time interval
+                    min_time <- min(my_data$time.days)
+                    max_time <- max(my_data$time.days)
+                    if(input$step_size == "2 days"){step_time <- 2}
+                    if(input$step_size == "4 days"){step_time <- 4}
+                    if(input$step_size == "6 days"){step_time <- 6}
+                    growth_timeline <- seq(min_time, max_time, by=step_time)
+                    growth_timeline <- growth_timeline[-length(growth_timeline)]
+                    if(input$GrowthInterval == "6 days"){
+                        temp_now <- subset(temp, temp$time.days < 6)
+                        model_now <- lm(temp_now$area.total ~ temp_now$time.days)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        names <- c(text="POT", "day", "GR", "R2")
+                        growth_data <- data.frame()
+                        for (k in names) growth_data[[k]] <- as.character()
+                        growth_data
+                        growth_data[1,1] <- temp_now$POT[1]
+                        growth_data[1,2] <- min(temp_now$time.days)
+                        growth_data[1,3] <- GR
+                        growth_data[1,4] <- R2
+                        for(t in 2:length(growth_timeline)){
+                            min = growth_timeline[t]
+                            max = min + 6
+                            temp_now <- subset(temp, temp$time.days < max)
+                            temp_now <- subset(temp_now, temp_now$time.days >= min)
+                            if(dim(temp_now)[1]>3){
+                            model_now <- lm(temp_now$area.total ~ temp_now$time.days)
+                            growth_data[t,1] <- temp_now$POT[1]
+                            growth_data[t,2] <- min(temp_now$time.days)
+                            growth_data[t,3] <- GR
+                            growth_data[t,4] <- R2}}
+                        counter = 1
+                        for(r in 1:length(all_plants)){
+                            temp <- subset(my_data, my_data$POT == all_plants[r])
+                            if(dim(temp)[1]>0){
+                                for(t in 1:length(growth_timeline)){
+                                    min = growth_timeline[t]
+                                    max = min + 6
+                                    temp_now <- subset(temp, temp$time.days < max)
+                                    temp_now <- subset(temp_now, temp_now$time.days >= min)
+                                    if(dim(temp_now)[1]>3){
+                                    model_now <- lm(temp_now$area.total ~ temp_now$time.days)
+                                    growth_data[counter,1] <- temp_now$POT[1]
+                                    growth_data[counter,2] <- min(temp_now$time.days)
+                                    growth_data[counter,3] <- model_now$coefficients[2]
+                                    growth_data[counter,4] <- summary(model_now)$r.squared
+                                    counter <- counter + 1}
+                                }}}
+                    }
+                    if(input$GrowthInterval == "8 days"){
+                        temp_now <- subset(temp, temp$time.days < 8)
+                        model_now <- lm(temp_now$area.total ~ temp_now$time.days)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        names <- c(text="POT", "day", "GR", "R2")
+                        growth_data <- data.frame()
+                        for (k in names) growth_data[[k]] <- as.character()
+                        growth_data
+                        growth_data[1,1] <- temp_now$POT[1]
+                        growth_data[1,2] <- min(temp_now$time.days)
+                        growth_data[1,3] <- GR
+                        growth_data[1,4] <- R2
+                        for(t in 2:length(growth_timeline)){
+                            min = growth_timeline[t]
+                            max = min + 8
+                            temp_now <- subset(temp, temp$time.days < max)
+                            temp_now <- subset(temp_now, temp_now$time.days >= min)
+                            if(dim(temp_now)[1]>3){
+                            model_now <- lm(temp_now$area.total ~ temp_now$time.days)
+                            growth_data[t,1] <- temp_now$POT[1]
+                            growth_data[t,2] <- min(temp_now$time.days)
+                            growth_data[t,3] <- GR
+                            growth_data[t,4] <- R2}}
+                        counter = 1
+                        for(r in 1:length(all_plants)){
+                            temp <- subset(my_data, my_data$POT == all_plants[r])
+                            if(dim(temp)[1]>0){
+                                for(t in 1:length(growth_timeline)){
+                                    min = growth_timeline[t]
+                                    max = min + 8
+                                    temp_now <- subset(temp, temp$time.days < max)
+                                    temp_now <- subset(temp_now, temp_now$time.days >= min)
+                                    if(dim(temp_now)[1]>3){
+                                    model_now <- lm(temp_now$area.total ~ temp_now$time.days)
+                                    growth_data[counter,1] <- temp_now$POT[1]
+                                    growth_data[counter,2] <- min(temp_now$time.days)
+                                    growth_data[counter,3] <- model_now$coefficients[2]
+                                    growth_data[counter,4] <- summary(model_now)$r.squared
+                                    counter <- counter + 1}
+                                }}}
+                    }
+                    if(input$GrowthInterval == "10 days"){
+                        temp_now <- subset(temp, temp$time.days < 10)
+                        model_now <- lm(temp_now$area.total ~ temp_now$time.days)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        names <- c(text="POT", "day", "GR", "R2")
+                        growth_data <- data.frame()
+                        for (k in names) growth_data[[k]] <- as.character()
+                        growth_data
+                        growth_data[1,1] <- temp_now$POT[1]
+                        growth_data[1,2] <- min(temp_now$time.days)
+                        growth_data[1,3] <- GR
+                        growth_data[1,4] <- R2
+                        for(t in 2:length(growth_timeline)){
+                            min = growth_timeline[t]
+                            max = min + 10
+                            temp_now <- subset(temp, temp$time.days < max)
+                            temp_now <- subset(temp_now, temp_now$time.days >= min)
+                            if(dim(temp_now)[1]>3){
+                            model_now <- lm(temp_now$area.total ~ temp_now$time.days)
+                            growth_data[t,1] <- temp_now$POT[1]
+                            growth_data[t,2] <- min(temp_now$time.days)
+                            growth_data[t,3] <- GR
+                            growth_data[t,4] <- R2}}
+                        counter = 1
+                        for(r in 1:length(all_plants)){
+                            temp <- subset(my_data, my_data$POT == all_plants[r])
+                            if(dim(temp)[1]>0){
+                                for(t in 1:length(growth_timeline)){
+                                    min = growth_timeline[t]
+                                    max = min + 10
+                                    temp_now <- subset(temp, temp$time.days < max)
+                                    temp_now <- subset(temp_now, temp_now$time.days >= min)
+                                    if(dim(temp_now)[1]>3){
+                                    model_now <- lm(temp_now$area.total ~ temp_now$time.days)
+                                    growth_data[counter,1] <- temp_now$POT[1]
+                                    growth_data[counter,2] <- min(temp_now$time.days)
+                                    growth_data[counter,3] <- model_now$coefficients[2]
+                                    growth_data[counter,4] <- summary(model_now)$r.squared
+                                    counter <- counter + 1}
+                                }}}
+                    }
+                }
+            }
+            if(input$dataGrowth == "Smooth data"){
+                my_data <- smooth_all()   
+                if(input$expType == "PhenoRig"){
+                    # isolate 1st plant 
+                    all_plants <- unique(my_data$Plant.ID)
+                    my_data$time.min <- as.numeric(as.character(my_data$time.min))
+                    temp <- subset(my_data, my_data$Plant.ID == all_plants[1])
+                    # isolate first time interval
+                    min_time <- min(my_data$time.min)
+                    max_time <- max(my_data$time.min)
+                    if(input$step_size == "1 h"){step_time <- 60}
+                    if(input$step_size == "6 h"){step_time <- 60*6}
+                    if(input$step_size == "24 h"){step_time <- 60*24}
+                    growth_timeline <- seq(min_time, max_time, by=step_time)
+                    growth_timeline <- growth_timeline[-length(growth_timeline)]
+                    if(input$GrowthInterval == "3 hours"){
+                        temp_now <- subset(temp, temp$time.min < 180)
+                        temp_now$area.spl <- as.numeric(temp_now$area.spl)
+                        temp_now$time.min <- as.numeric(temp_now$time.min)
+                        model_now <- lm(temp_now$area.spl ~ temp_now$time.min)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        names <- c(text="Plant.ID", "min", "GR", "R2")
+                        growth_data <- data.frame()
+                        for (k in names) growth_data[[k]] <- as.character()
+                        growth_data
+                        growth_data[1,1] <- temp_now$Plant.ID[1]
+                        growth_data[1,2] <- min(temp_now$time.min)
+                        growth_data[1,3] <- GR
+                        growth_data[1,4] <- R2
+                        for(t in 2:length(growth_timeline)){
+                            min = growth_timeline[t]
+                            max = min + 180
+                            temp_now <- subset(temp, temp$time.min < max)
+                            temp_now <- subset(temp_now, temp_now$time.min >= min)
+                            if(dim(temp_now)[1]>3){
+                            temp_now$area.spl <- as.numeric(temp_now$area.spl)
+                            temp_now$time.min <- as.numeric(temp_now$time.min)
+                            model_now <- lm(temp_now$area.spl ~ temp_now$time.min)
+                            growth_data[t,1] <- temp_now$Plant.ID[1]
+                            growth_data[t,2] <- min(temp_now$time.min)
+                            growth_data[t,3] <- GR
+                            growth_data[t,4] <- R2}}
+                        counter = t + 1
+                        for(r in 1:length(all_plants)){
+                            temp <- subset(my_data, my_data$Plant.ID == all_plants[r])
+                            if(dim(temp)[1]>0){
+                                for(t in 1:length(growth_timeline)){
+                                    min = growth_timeline[t]
+                                    max = min + 180
+                                    temp_now <- subset(temp, temp$time.min < max)
+                                    temp_now <- subset(temp_now, temp_now$time.min >= min)
+                                    if(dim(temp_now)[1]>3){
+                                    model_now <- lm(temp_now$area.spl ~ temp_now$time.min)
+                                    growth_data[counter,1] <- temp_now$Plant.ID[1]
+                                    growth_data[counter,2] <- min(temp_now$time.min)
+                                    growth_data[counter,3] <- model_now$coefficients[2]
+                                    growth_data[counter,4] <- summary(model_now)$r.squared
+                                    counter <- counter + 1}
+                                }}}
+                    }
+                    if(input$GrowthInterval == "6 hours"){
+                        temp_now <- subset(temp, temp$time.min < 360)
+                        model_now <- lm(temp_now$area.spl ~ temp_now$time.min)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        names <- c(text="Plant.ID", "min", "GR", "R2")
+                        growth_data <- data.frame()
+                        for (k in names) growth_data[[k]] <- as.character()
+                        growth_data
+                        growth_data[1,1] <- temp_now$Plant.ID[1]
+                        growth_data[1,2] <- min(temp_now$time.min)
+                        growth_data[1,3] <- GR
+                        growth_data[1,4] <- R2
+                        for(t in 2:length(growth_timeline)){
+                            min = growth_timeline[t]
+                            max = min + 360
+                            temp_now <- subset(temp, temp$time.min < max)
+                            temp_now <- subset(temp_now, temp_now$time.min >= min)
+                            if(dim(temp_now)[1]>3){
+                            model_now <- lm(temp_now$area.spl ~ temp_now$time.min)
+                            growth_data[t,1] <- temp_now$Plant.ID[1]
+                            growth_data[t,2] <- min(temp_now$time.min)
+                            growth_data[t,3] <- GR
+                            growth_data[t,4] <- R2}}
+                        counter = 1
+                        for(r in 1:length(all_plants)){
+                            temp <- subset(my_data, my_data$Plant.ID == all_plants[r])
+                            if(dim(temp)[1]>0){
+                                for(t in 1:length(growth_timeline)){
+                                    min = growth_timeline[t]
+                                    max = min + 360
+                                    temp_now <- subset(temp, temp$time.min < max)
+                                    temp_now <- subset(temp_now, temp_now$time.min >= min)
+                                    if(dim(temp_now)[1]>3){
+                                    model_now <- lm(temp_now$area.spl ~ temp_now$time.min)
+                                    growth_data[counter,1] <- temp_now$Plant.ID[1]
+                                    growth_data[counter,2] <- min(temp_now$time.min)
+                                    growth_data[counter,3] <- model_now$coefficients[2]
+                                    growth_data[counter,4] <- summary(model_now)$r.squared
+                                    counter <- counter + 1}
+                                }}}
+                    }
+                    if(input$GrowthInterval == "day"){
+                        temp_now <- subset(temp, temp$time.min < 1440)
+                        model_now <- lm(temp_now$area.spl ~ temp_now$time.min)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        names <- c(text="Plant.ID", "min", "GR", "R2")
+                        growth_data <- data.frame()
+                        for (k in names) growth_data[[k]] <- as.character()
+                        growth_data
+                        growth_data[1,1] <- temp_now$Plant.ID[1]
+                        growth_data[1,2] <- min(temp_now$time.min)
+                        growth_data[1,3] <- GR
+                        growth_data[1,4] <- R2
+                        for(t in 2:length(growth_timeline)){
+                            min = growth_timeline[t]
+                            max = min + 1440
+                            temp_now <- subset(temp, temp$time.min < max)
+                            temp_now <- subset(temp_now, temp_now$time.min >= min)
+                            if(dim(temp_now)[1]>3){
+                            model_now <- lm(temp_now$area.spl ~ temp_now$time.min)
+                            growth_data[t,1] <- temp_now$Plant.ID[1]
+                            growth_data[t,2] <- min(temp_now$time.min)
+                            growth_data[t,3] <- GR
+                            growth_data[t,4] <- R2}}
+                        counter = 1
+                        for(r in 1:length(all_plants)){
+                            temp <- subset(my_data, my_data$Plant.ID == all_plants[r])
+                            if(dim(temp)[1]>0){
+                                for(t in 1:length(growth_timeline)){
+                                    min = growth_timeline[t]
+                                    max = min + 1440
+                                    temp_now <- subset(temp, temp$time.min < max)
+                                    temp_now <- subset(temp_now, temp_now$time.min >= min)
+                                    if(dim(temp_now)[1]>3){
+                                    model_now <- lm(temp_now$area.spl ~ temp_now$time.min)
+                                    growth_data[counter,1] <- temp_now$Plant.ID[1]
+                                    growth_data[counter,2] <- min(temp_now$time.min)
+                                    growth_data[counter,3] <- model_now$coefficients[2]
+                                    growth_data[counter,4] <- summary(model_now)$r.squared
+                                    counter <- counter + 1}
+                                }}}
+                    }
+                    if(input$GrowthInterval == "2 days"){
+                        temp_now <- subset(temp, temp$time.min < 2880)
+                        model_now <- lm(temp_now$area.spl ~ temp_now$time.min)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        names <- c(text="Plant.ID", "min", "GR", "R2")
+                        growth_data <- data.frame()
+                        for (k in names) growth_data[[k]] <- as.character()
+                        growth_data
+                        growth_data[1,1] <- temp_now$Plant.ID[1]
+                        growth_data[1,2] <- min(temp_now$time.min)
+                        growth_data[1,3] <- GR
+                        growth_data[1,4] <- R2
+                        for(t in 2:length(growth_timeline)){
+                            min = growth_timeline[t]
+                            max = min + 2880
+                            temp_now <- subset(temp, temp$time.min < max)
+                            temp_now <- subset(temp_now, temp_now$time.min >= min)
+                            if(dim(temp_now)[1]>3){
+                            model_now <- lm(temp_now$area.spl ~ temp_now$time.min)
+                            growth_data[t,1] <- temp_now$Plant.ID[1]
+                            growth_data[t,2] <- min(temp_now$time.min)
+                            growth_data[t,3] <- GR
+                            growth_data[t,4] <- R2}}
+                        counter = 1
+                        for(r in 1:length(all_plants)){
+                            temp <- subset(my_data, my_data$Plant.ID == all_plants[r])
+                            if(dim(temp)[1]>0){
+                                for(t in 1:length(growth_timeline)){
+                                    min = growth_timeline[t]
+                                    max = min + 2880
+                                    temp_now <- subset(temp, temp$time.min < max)
+                                    temp_now <- subset(temp_now, temp_now$time.min >= min)
+                                    if(dim(temp_now)[1]>3){
+                                    model_now <- lm(temp_now$area.spl ~ temp_now$time.min)
+                                    growth_data[counter,1] <- temp_now$Plant.ID[1]
+                                    growth_data[counter,2] <- min(temp_now$time.min)
+                                    growth_data[counter,3] <- model_now$coefficients[2]
+                                    growth_data[counter,4] <- summary(model_now)$r.squared
+                                    counter <- counter + 1}
+                                }}}
+                    }
+                }
+                if(input$expType == "PhenoCage"){
+                    # isolate 1st plant 
+                    all_plants <- unique(my_data$POT)
+                    my_data$time.days <- as.numeric(as.character(my_data$time.days))
+                    temp <- subset(my_data, my_data$POT == all_plants[1])
+                    # isolate first time interval
+                    min_time <- min(my_data$time.days)
+                    max_time <- max(my_data$time.days)
+                    if(input$step_size == "2 days"){step_time <- 2}
+                    if(input$step_size == "4 days"){step_time <- 4}
+                    if(input$step_size == "6 days"){step_time <- 6}
+                    growth_timeline <- seq(min_time, max_time, by=step_time)
+                    growth_timeline <- growth_timeline[-length(growth_timeline)]
+                    if(input$GrowthInterval == "6 days"){
+                        temp_now <- subset(temp, temp$time.days < 6)
+                        model_now <- lm(temp_now$area.total.spl ~ temp_now$time.days)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        names <- c(text="POT", "day", "GR", "R2")
+                        growth_data <- data.frame()
+                        for (k in names) growth_data[[k]] <- as.character()
+                        growth_data
+                        growth_data[1,1] <- temp_now$POT[1]
+                        growth_data[1,2] <- min(temp_now$time.days)
+                        growth_data[1,3] <- GR
+                        growth_data[1,4] <- R2
+                        for(t in 2:length(growth_timeline)){
+                            min = growth_timeline[t]
+                            max = min + 6
+                            temp_now <- subset(temp, temp$time.days < max)
+                            temp_now <- subset(temp_now, temp_now$time.days >= min)
+                            if(dim(temp_now)[1]>3){
+                            model_now <- lm(temp_now$area.total.spl ~ temp_now$time.days)
+                            growth_data[t,1] <- temp_now$POT[1]
+                            growth_data[t,2] <- min(temp_now$time.days)
+                            growth_data[t,3] <- GR
+                            growth_data[t,4] <- R2}}
+                        counter = 1
+                        for(r in 1:length(all_plants)){
+                            temp <- subset(my_data, my_data$POT == all_plants[r])
+                            if(dim(temp)[1]>0){
+                                for(t in 1:length(growth_timeline)){
+                                    min = growth_timeline[t]
+                                    max = min + 6
+                                    temp_now <- subset(temp, temp$time.days < max)
+                                    temp_now <- subset(temp_now, temp_now$time.days >= min)
+                                    if(dim(temp_now)[1]>3){
+                                    model_now <- lm(temp_now$area.total.spl ~ temp_now$time.days)
+                                    growth_data[counter,1] <- temp_now$POT[1]
+                                    growth_data[counter,2] <- min(temp_now$time.days)
+                                    growth_data[counter,3] <- model_now$coefficients[2]
+                                    growth_data[counter,4] <- summary(model_now)$r.squared
+                                    counter <- counter + 1}
+                                }}}
+                    }
+                    if(input$GrowthInterval == "8 days"){
+                        temp_now <- subset(temp, temp$time.days < 8)
+                        model_now <- lm(temp_now$area.total.spl ~ temp_now$time.days)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        names <- c(text="POT", "day", "GR", "R2")
+                        growth_data <- data.frame()
+                        for (k in names) growth_data[[k]] <- as.character()
+                        growth_data
+                        growth_data[1,1] <- temp_now$POT[1]
+                        growth_data[1,2] <- min(temp_now$time.days)
+                        growth_data[1,3] <- GR
+                        growth_data[1,4] <- R2
+                        for(t in 2:length(growth_timeline)){
+                            min = growth_timeline[t]
+                            max = min + 8
+                            temp_now <- subset(temp, temp$time.days < max)
+                            temp_now <- subset(temp_now, temp_now$time.days >= min)
+                            if(dim(temp_now)[1]>3){
+                            model_now <- lm(temp_now$area.total.spl ~ temp_now$time.days)
+                            growth_data[t,1] <- temp_now$POT[1]
+                            growth_data[t,2] <- min(temp_now$time.days)
+                            growth_data[t,3] <- GR
+                            growth_data[t,4] <- R2}}
+                        counter = 1
+                        for(r in 1:length(all_plants)){
+                            temp <- subset(my_data, my_data$POT == all_plants[r])
+                            if(dim(temp)[1]>0){
+                                for(t in 1:length(growth_timeline)){
+                                    min = growth_timeline[t]
+                                    max = min + 8
+                                    temp_now <- subset(temp, temp$time.days < max)
+                                    temp_now <- subset(temp_now, temp_now$time.days >= min)
+                                    if(dim(temp_now)[1]>3){
+                                    model_now <- lm(temp_now$area.total.spl ~ temp_now$time.days)
+                                    growth_data[counter,1] <- temp_now$POT[1]
+                                    growth_data[counter,2] <- min(temp_now$time.days)
+                                    growth_data[counter,3] <- model_now$coefficients[2]
+                                    growth_data[counter,4] <- summary(model_now)$r.squared
+                                    counter <- counter + 1}
+                                }}}
+                    }
+                    if(input$GrowthInterval == "10 days"){
+                        temp_now <- subset(temp, temp$time.days < 10)
+                        model_now <- lm(temp_now$area.total.spl ~ temp_now$time.days)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        names <- c(text="POT", "day", "GR", "R2")
+                        growth_data <- data.frame()
+                        for (k in names) growth_data[[k]] <- as.character()
+                        growth_data
+                        growth_data[1,1] <- temp_now$POT[1]
+                        growth_data[1,2] <- min(temp_now$time.days)
+                        growth_data[1,3] <- GR
+                        growth_data[1,4] <- R2
+                        for(t in 2:length(growth_timeline)){
+                            min = growth_timeline[t]
+                            max = min + 10
+                            temp_now <- subset(temp, temp$time.days < max)
+                            temp_now <- subset(temp_now, temp_now$time.days >= min)
+                            if(dim(temp_now)[1]>3){
+                            model_now <- lm(temp_now$area.total.spl ~ temp_now$time.days)
+                            growth_data[t,1] <- temp_now$POT[1]
+                            growth_data[t,2] <- min(temp_now$time.days)
+                            growth_data[t,3] <- GR
+                            growth_data[t,4] <- R2}}
+                        counter = 1
+                        for(r in 1:length(all_plants)){
+                            temp <- subset(my_data, my_data$POT == all_plants[r])
+                            if(dim(temp)[1]>0){
+                                for(t in 1:length(growth_timeline)){
+                                    min = growth_timeline[t]
+                                    max = min + 10
+                                    temp_now <- subset(temp, temp$time.days < max)
+                                    temp_now <- subset(temp_now, temp_now$time.days >= min)
+                                    if(dim(temp_now)[1]>3){
+                                    model_now <- lm(temp_now$area.total.spl ~ temp_now$time.days)
+                                    growth_data[counter,1] <- temp_now$POT[1]
+                                    growth_data[counter,2] <- min(temp_now$time.days)
+                                    growth_data[counter,3] <- model_now$coefficients[2]
+                                    growth_data[counter,4] <- summary(model_now)$r.squared
+                                    counter <- counter + 1}
+                                }}}
+                    }
+                }
+            }}
+        if(input$GrowthType == "Over whole experiment"){
+            if(input$dataGrowth == "Original data"){
+                my_data <- Raspi_unique()
+                if(input$expType == "PhenoRig"){
+                    all_plants <- unique(my_data$Plant.ID)
+                    my_data$time.min <- as.numeric(as.character(my_data$time.min))
+                    temp <- subset(my_data, my_data$Plant.ID == all_plants[1])
+                    names <- c(text="Plant.ID", "GR", "R2")
+                    growth_data <- data.frame()
+                    for (k in names) growth_data[[k]] <- as.character()
+                    growth_data
+                    model_now <- lm(temp$area ~ temp$time.min)
+                    GR <- model_now$coefficients[2]
+                    R2 <- summary(model_now)$r.squared
+                    growth_data[1,1] <- temp$Plant.ID[1]
+                    growth_data[1,2] <- GR
+                    growth_data[1,3] <- R2
+                    for(i in 2:length(all_plants)){
+                        temp <- subset(my_data, my_data$Plant.ID == all_plants[i])
+                        names <- c(text="Plant.ID", "GR", "R2")
+                        model_now <- lm(temp$area ~ temp$time.min)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        growth_data[i,1] <- temp$Plant.ID[1]
+                        growth_data[i,2] <- GR
+                        growth_data[i,3] <- R2
+                    }}
+                if(input$expType == "PhenoCage"){
+                    all_plants <- unique(my_data$POT)
+                    my_data$time.days <- as.numeric(as.character(my_data$time.days))
+                    temp <- subset(my_data, my_data$POT == all_plants[1])
+                    names <- c(text="POT", "GR", "R2")
+                    growth_data <- data.frame()
+                    for (k in names) growth_data[[k]] <- as.character()
+                    growth_data
+                    model_now <- lm(temp$area.total ~ temp$time.days)
+                    GR <- model_now$coefficients[2]
+                    R2 <- summary(model_now)$r.squared
+                    growth_data[1,1] <- temp_now$POT[1]
+                    growth_data[1,2] <- GR
+                    growth_data[1,3] <- R2
+                    for(i in 2:length(all_plants)){
+                        temp <- subset(my_data, my_data$POT == all_plants[i])
+                        names <- c(text="POT", "GR", "R2")
+                        model_now <- lm(temp$area.total ~ temp$time.days)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        growth_data[i,1] <- temp$POT[1]
+                        growth_data[i,2] <- GR
+                        growth_data[i,3] <- R2
+                    }}}
+            if(input$dataGrowth == "Smooth data"){
+                my_data <- smooth_all()   
+                if(input$expType == "PhenoRig"){
+                    all_plants <- unique(my_data$Plant.ID)
+                    my_data$time.min <- as.numeric(as.character(my_data$time.min))
+                    temp <- subset(my_data, my_data$Plant.ID == all_plants[1])
+                    names <- c(text="Plant.ID", "GR", "R2")
+                    growth_data <- data.frame()
+                    for (k in names) growth_data[[k]] <- as.character()
+                    growth_data
+                    model_now <- lm(temp$area.spl ~ temp$time.min)
+                    GR <- model_now$coefficients[2]
+                    R2 <- summary(model_now)$r.squared
+                    growth_data[1,1] <- temp$Plant.ID[1]
+                    growth_data[1,2] <- GR
+                    growth_data[1,3] <- R2
+                    for(i in 2:length(all_plants)){
+                        temp <- subset(my_data, my_data$Plant.ID == all_plants[i])
+                        names <- c(text="Plant.ID", "GR", "R2")
+                        model_now <- lm(temp$area.spl ~ temp$time.min)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        growth_data[i,1] <- temp$Plant.ID[1]
+                        growth_data[i,2] <- GR
+                        growth_data[i,3] <- R2
+                    }}
+                if(input$expType == "PhenoCage"){
+                    all_plants <- unique(my_data$POT)
+                    my_data$time.days <- as.numeric(as.character(my_data$time.days))
+                    temp <- subset(my_data, my_data$POT == all_plants[1])
+                    names <- c(text="POT", "GR", "R2")
+                    growth_data <- data.frame()
+                    for (k in names) growth_data[[k]] <- as.character()
+                    growth_data
+                    model_now <- lm(temp$area.total.spl ~ temp$time.days)
+                    GR <- model_now$coefficients[2]
+                    R2 <- summary(model_now)$r.squared
+                    growth_data[1,1] <- temp$POT[1]
+                    growth_data[1,2] <- GR
+                    growth_data[1,3] <- R2
+                    for(i in 2:length(all_plants)){
+                        temp <- subset(my_data, my_data$POT == all_plants[i])
+                        names <- c(text="POT", "GR", "R2")
+                        model_now <- lm(temp$area.total.spl ~ temp$time.days)
+                        GR <- model_now$coefficients[2]
+                        R2 <- summary(model_now)$r.squared
+                        growth_data[i,1] <- temp$POT[1]
+                        growth_data[i,2] <- GR
+                        growth_data[i,3] <- R2
+                    }}}
+        }
+        meta <- decoding()
+        if(input$expType == "PhenoCage"){
+            growth_data <- merge(growth_data, meta, by="POT", all = TRUE, allow.cartesian = TRUE)
+            }
+        if(input$expType == "PhenoRig"){
+            meta$Plant.ID <- paste(meta$RasPi, meta$Camera, meta$position, sep="_")
+            growth_data <- merge(growth_data, meta, by=c("Plant.ID"), all = TRUE, allow.cartesian = TRUE)
+        }
+        growth_data <- na.omit(growth_data)
+        return(growth_data)
+    })
+    
+    
+    
+    
+    output$Growth_table <- renderDataTable(
+        Growth_rate_table()
+    )
+    
+    # Growth rate table button
+    
+    output$Growth_table_button <- renderUI({
+        if (is.null(Growth_rate_table())) {
+            return()
+        }
+        else{
+            downloadButton("growthtable_download_button", label = "Download table")
+        }
+    })
+    
+    
+    ########### download growth rate file ####################################  
+    
+    
+    output$growthtable_download_button <- downloadHandler(
+        filename = paste("GrowthRate_data.RasPiPhenoApp.csv"),
+        content <- function(file) {
+            result <- Growth_rate_table()
+            write.csv(result, file, row.names = FALSE)
+            
+        }
+    )
+    
+    # # # # # # # # Growth rate graph inputs # # # # # # # # # # # # # # 
+    
+    output$Growth_Color_button <- renderUI({
+        if(is.null(Growth_rate_table())){return()} else {
+            tagList(
+                selectizeInput(
+                    inputId = "ColorGrowth",
+                    label = "Color graph per:",
+                    choices = metaList(),
+                    multiple = F
+                ))}
+    })
+    
+    output$Growth_Xaxis <- renderUI({
+        if(input$GrowthType == "Step-wise"){return()} else {
+            tagList(
+                selectizeInput(
+                    inputId = "XGrowth",
+                    label = "X-axis:",
+                    choices = metaList(),
+                    multiple = F
+                ))}
+    })
+    
+    output$Growth_facet_check <- renderUI({
+        if(is.null(Growth_rate_table())){return()} else {
+            tagList(
+                checkboxInput(
+                    inputId = "GrowthFacet",
+                    label = "Split the graph"
+                ))}
+    })
+    
+    output$Growth_facet <- renderUI({
+        if(input$GrowthFacet == FALSE){return()} else {
+            tagList(
+                selectizeInput(
+                    inputId = "FacetGrowth",
+                    label = "Facet graph per:",
+                    choices = metaList(),
+                    multiple = F
+                ))}
+    })
+    
+    # # # # # # # # Growth rate graph  # # # # # # # # # # # # # # 
+    
+    Growth_rate_graph <- reactive(if(input$GoGrowth==FALSE){return(NULL)}else{
+        my_data <- Growth_rate_table()
+        my_data$GR <- as.numeric(as.character(my_data$GR))
+        my_data$fill <- my_data[,input$ColorGrowth]
+        if(input$GrowthType == "Over whole experiment"){
+            my_data$Xaxis <- my_data[,input$XGrowth]
+            if(input$expType == "PhenoRig"){
+                my_plot <- ggerrorplot(my_data, y="GR", x="Xaxis", fill="fill", color="fill",
+                                       desc_stat = "mean_sd", add="jitter", add.params = list(color = "darkgray"),
+                                       ylab="Growth Rate (pix / min)", xlab=input$XGrowth)
+            }
+            if(input$expType == "PhenoCage"){
+                my_plot <- ggerrorplot(my_data, y="GR", x="Xaxis", fill="fill", color="fill",
+                                       desc_stat = "mean_sd", add="jitter", add.params = list(color = "darkgray"),
+                                       ylab="Growth Rate (pix / day)", xlab=input$XGrowth)
+            }}
+        if(input$GrowthType == "Step-wise"){
+            if(input$expType == "PhenoRig"){
+                my_data$min <- as.numeric(as.character(my_data$min))
+                my_plot <- ggplot(data=my_data, aes(x= min, y=GR, group = Plant.ID, color = fill)) 
+                my_plot <- my_plot + geom_line(alpha = 0.1) 
+                my_plot <- my_plot + stat_summary(fun.data = mean_se, geom="ribbon", linetype=0, aes(group= fill), alpha=0.3)
+                my_plot <- my_plot + stat_summary(fun=mean, aes(group= fill),  size=0.7, geom="line", linetype = "dashed")
+                my_plot <- my_plot + ylab("Growth Rate (pix / min)") + xlab("time (min)")
+            }
+            if(input$expType == "PhenoCage"){
+                my_data$day <- as.numeric(as.character(my_data$day))
+                my_plot <- ggplot(data=my_data, aes(x= day, y=GR, group = POT, color = fill)) 
+                my_plot <- my_plot + geom_line(alpha = 0.1) 
+                my_plot <- my_plot + stat_summary(fun.data = mean_se, geom="ribbon", linetype=0, aes(group= fill), alpha=0.3)
+                my_plot <- my_plot + stat_summary(fun=mean, aes(group= fill),  size=0.7, geom="line", linetype = "dashed")
+                my_plot <- my_plot + ylab("Growth Rate (pix / day)") + xlab("time (days)")
+            }
+        }
+        #my_plot <- my_plot + scale_color_jco()
+        return(my_plot)
+    })
+    
+    output$Growth_Graph <- renderPlot({
+        Growth_rate_graph()
+    })
+    
+    
+    ########### download growth rate graph ####################################  
+    
+    output$Growth_graph_button <- renderUI({
+        if (is.null(Growth_rate_graph())) {
+            return()
+        }
+        else{
+            downloadButton("growthgraph_download_button", label = "Download plot")
+        }
+    })
+    
+    
+    output$growthgraph_download_button <- downloadHandler(
+        filename = paste("GrowthRate_graph.RasPiPhenoApp.pdf"),
+        content <- function(file) {
+            pdf(file)
+            Growth_rate_graph()
+            dev.off()
+            
+        }
+    )
+    
     
     # Cant touch this! 
 }

@@ -45,6 +45,8 @@ ui <- fluidPage(
     ))
     # end of Tab1
   ),
+  
+  # # # # # # # # # # # # # # # # TAB 2 # # # # # # # # # # # # # # # # # # # # # # # # 
 
   tabPanel("Data Smoothing", icon=icon("blender"),
            sidebarPanel(
@@ -54,7 +56,7 @@ ui <- fluidPage(
              actionButton("SmoothGo", label = "Smooth all samples")
            ),
            mainPanel(navbarPage(
-             ">> Smooooth <<",
+             "Smooooth",
              tabPanel("smooth design", icon = icon("snowplow"),
                uiOutput("Choose_smooth_sample"),
                plotOutput("Smoothed_graph_one_sample")),
@@ -66,7 +68,35 @@ ui <- fluidPage(
                       plotlyOutput("all_smooth_graph"))
              
            ))
+           # end of Tab2
+  ),
+  
+  # # # # # # # # # # # # # # # # TAB 3 # # # # # # # # # # # # # # # # # # # # # # # # 
+  
+  tabPanel("Growth Rate", icon=icon("seedling"),
+           sidebarPanel(
+             selectizeInput("dataGrowth", label = "What data to use for growth rate calculations?", 
+                            choices = c("Original data", "Smooth data"), multiple = F),
+             selectizeInput("GrowthType", "Growth rate type to be calculated:",
+                            choices=c("Over whole experiment", "Step-wise")),
+             uiOutput("interval"),
+             uiOutput("step"),
+             actionButton("GoGrowth", label = "Calculate Growth Rate")),
+           
+           mainPanel(navbarPage("Grrrrrow",
+                                tabPanel("Growth Table",
+                                         uiOutput("Growth_table_button"),
+                                         dataTableOutput("Growth_table")),
+                                tabPanel("Growth Graph", 
+                                        uiOutput("Growth_Color_button"),
+                                        uiOutput("Growth_Xaxis"),
+                                        uiOutput("Growth_facet_check"),
+                                        uiOutput("Growth_facet"),
+                                        plotOutput("Growth_Graph"),
+                                        uiOutput("Growth_graph_button"))
+           ))
            # end of Tab3
   )
+  
 # end of App - do not move!
 ))
