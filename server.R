@@ -201,7 +201,7 @@ server <- function(input, output) {
         }
     )
     
-    ########### Data Vis tab ####################################  
+    ########### Data Vis graph ####################################  
     
     metaList = reactive(if(is.null(Raspi_unique())){
         return(NULL)} else {
@@ -226,19 +226,20 @@ server <- function(input, output) {
     
     TimeGraph <- reactive(if(is.null(Raspi_unique())){return(NULL)}else{  
         my_data <- Raspi_unique()
-        my_data$col.sorting <- as.factor(my_data[,input$ColorAreaGG])
+        my_data$col.sorting <- my_data[,input$ColorAreaGG]
+        my_data$col.sorting <- as.factor(my_data$col.sorting)
         if(input$expType == "PhenoRig"){
             my_data$time.min <- as.numeric(my_data$time.min)
             my_data$area <- as.numeric(my_data$area)
             Area_graph <- ggplot(data=my_data, aes(x= time.min, y=area, group = Plant.ID, color = col.sorting)) 
-            Area_graph <- Area_graph + geom_line(alpha = 0.1) 
+            Area_graph <- Area_graph + geom_line(alpha = 0.3) 
             Area_graph <- Area_graph + ylab("Rosette Area (pixels)") + xlab("Time (minutes)")
         }
         if(input$expType == "PhenoCage"){
             my_data$time.days <- as.numeric(my_data$time.days)
             my_data$area.total <- as.numeric(my_data$area.total)
             Area_graph <- ggplot(data=my_data, aes(x= time.days, y=area.total, group = POT, color = col.sorting)) 
-            Area_graph <- Area_graph + geom_line(alpha = 0.1) 
+            Area_graph <- Area_graph + geom_line(alpha = 0.3) 
             Area_graph <- Area_graph + ylab("Cummulative Shoot Area (pixels)") + xlab("Time (days)")
         }
         Area_graph
@@ -248,7 +249,7 @@ server <- function(input, output) {
         ggplotly(TimeGraph())
     })
     
-   
+   # # # # # # # Smooth tab # # # # # 
     
     smooth_sample <- reactive(if(is.null(Raspi_unique())){return(NULL)
     }else{  
@@ -273,6 +274,8 @@ server <- function(input, output) {
                 choices = smooth_sample(),
                 multiple=F))}
     })
+    
+    # # # Smooth example # # # #
     
     Smooth_plot_one <- reactive(
         if(is.null(smooth_sample())){return(NULL)
@@ -303,25 +306,25 @@ server <- function(input, output) {
         Smooth_plot_one()}
     )
     
+    output$degFreeUI <- renderUI({if(input$smoothType == "SmoothSpline"){
+        sliderInput("degFree", label="How many degrees of freedom would you like to use?", min = 1, max=20, step = 1, value = 2)
+    }else{return(NULL)}})
+    
+    output$KnotesUI <- renderUI({if(input$smoothType != "LowessFit"){return(NULL)}else{
+        sliderInput("noKnots", label="How many knots would you like to use?", min = 1, max=20, step = 1, value = 2)
+    }})
+    
+    # # # Smooth calculations for all
+    
     smooth_all <- reactive(if(input$SmoothGo == FALSE){return(NULL)}else{
         my_data <- Raspi_unique()
-        if(input$expType == "PhenoRig"){
-            names <- c(text="Plant.ID", "time.min", "area.spl")
-            spline_data <- data.frame()
-            for (k in names) spline_data[[k]] <- as.character()
-            i=1
-            temp <- subset(my_data, my_data$Plant.ID == unique(my_data$Plant.ID)[1])
-            temp$time.min <- as.numeric(as.character(temp$time.min))
-            day <- unique(temp$time.min)
-            max_day <- length(day)
-            plot.spl <- with(temp, smooth.spline(time.min, area, df = as.numeric(input$degFree)))
-            pred_temp <- predict(plot.spl, day)
-            spline_data[1:max_day,2] <- pred_temp$x
-            spline_data[1:max_day,3] <- pred_temp$y
-            spline_data[1:max_day,1] <- temp$Plant.ID[1]
-            final_spline <- spline_data
-            for(i in 1:length(unique(my_data$Plant.ID))){
-                temp <- subset(my_data, my_data$Plant.ID == unique(my_data$Plant.ID)[i])
+        if(input$smoothType== "SmoothSpline"){
+            if(input$expType == "PhenoRig"){
+                names <- c(text="Plant.ID", "time.min", "area.spl")
+                spline_data <- data.frame()
+                for (k in names) spline_data[[k]] <- as.character()
+                i=1
+                temp <- subset(my_data, my_data$Plant.ID == unique(my_data$Plant.ID)[1])
                 temp$time.min <- as.numeric(as.character(temp$time.min))
                 day <- unique(temp$time.min)
                 max_day <- length(day)
@@ -330,30 +333,30 @@ server <- function(input, output) {
                 spline_data[1:max_day,2] <- pred_temp$x
                 spline_data[1:max_day,3] <- pred_temp$y
                 spline_data[1:max_day,1] <- temp$Plant.ID[1]
-                final_spline <- rbind(final_spline, spline_data)
-            }
-            meta <- decoding()
-            meta$Plant.ID <- paste(meta$RasPi, meta$Camera, meta$position, sep="_")
-            Raspi_decoded <- merge(final_spline, meta, by="Plant.ID", all = TRUE) 
-            Raspi_decoded2 <- na.omit(Raspi_decoded)
-            }
-        if(input$expType == "PhenoCage"){
-            names <- c(text="POT", "time.days", "area.total.spl")
-            spline_data <- data.frame()
-            for (k in names) spline_data[[k]] <- as.character()
-            i=1
-            temp <- subset(my_data, my_data$POT == unique(my_data$POT)[1])
-            temp$time.day <- as.numeric(as.character(temp$time.day))
-            day <- unique(temp$time.day)
-            max_day <- length(day)
-            plot.spl <- with(temp, smooth.spline(time.day, area.total, df = as.numeric(input$degFree)))
-            pred_temp <- predict(plot.spl, day)
-            spline_data[1:max_day,2] <- pred_temp$x
-            spline_data[1:max_day,3] <- pred_temp$y
-            spline_data[1:max_day,1] <- temp$POT[1]
-            final_spline <- spline_data
-            for(i in 1:length(unique(my_data$POT))){
-                temp <- subset(my_data, my_data$POT == unique(my_data$POT)[i])
+                final_spline <- spline_data
+                for(i in 1:length(unique(my_data$Plant.ID))){
+                    temp <- subset(my_data, my_data$Plant.ID == unique(my_data$Plant.ID)[i])
+                    temp$time.min <- as.numeric(as.character(temp$time.min))
+                    day <- unique(temp$time.min)
+                    max_day <- length(day)
+                    plot.spl <- with(temp, smooth.spline(time.min, area, df = as.numeric(input$degFree)))
+                    pred_temp <- predict(plot.spl, day)
+                    spline_data[1:max_day,2] <- pred_temp$x
+                    spline_data[1:max_day,3] <- pred_temp$y
+                    spline_data[1:max_day,1] <- temp$Plant.ID[1]
+                    final_spline <- rbind(final_spline, spline_data)
+                }
+                meta <- decoding()
+                meta$Plant.ID <- paste(meta$RasPi, meta$Camera, meta$position, sep="_")
+                Raspi_decoded <- merge(final_spline, meta, by="Plant.ID", all = TRUE) 
+                Raspi_decoded2 <- na.omit(Raspi_decoded)
+                }
+            if(input$expType == "PhenoCage"){
+                names <- c(text="POT", "time.days", "area.total.spl")
+                spline_data <- data.frame()
+                for (k in names) spline_data[[k]] <- as.character()
+                i=1
+                temp <- subset(my_data, my_data$POT == unique(my_data$POT)[1])
                 temp$time.day <- as.numeric(as.character(temp$time.day))
                 day <- unique(temp$time.day)
                 max_day <- length(day)
@@ -362,13 +365,25 @@ server <- function(input, output) {
                 spline_data[1:max_day,2] <- pred_temp$x
                 spline_data[1:max_day,3] <- pred_temp$y
                 spline_data[1:max_day,1] <- temp$POT[1]
-                final_spline <- rbind(final_spline, spline_data)
-            }
-            meta <- decoding()
-            Raspi_decoded <- merge(final_spline, meta, by="POT", all = TRUE) 
-            Raspi_decoded2 <- na.omit(Raspi_decoded)
-            
-        }
+                final_spline <- spline_data
+                for(i in 1:length(unique(my_data$POT))){
+                    temp <- subset(my_data, my_data$POT == unique(my_data$POT)[i])
+                    temp$time.day <- as.numeric(as.character(temp$time.day))
+                    day <- unique(temp$time.day)
+                    max_day <- length(day)
+                    plot.spl <- with(temp, smooth.spline(time.day, area.total, df = as.numeric(input$degFree)))
+                    pred_temp <- predict(plot.spl, day)
+                    spline_data[1:max_day,2] <- pred_temp$x
+                    spline_data[1:max_day,3] <- pred_temp$y
+                    spline_data[1:max_day,1] <- temp$POT[1]
+                    final_spline <- rbind(final_spline, spline_data)
+                }
+                meta <- decoding()
+                Raspi_decoded <- merge(final_spline, meta, by="POT", all = TRUE) 
+                Raspi_decoded2 <- na.omit(Raspi_decoded)
+            }}
+        #if(input$smoothType== "LowessFit"){}
+        #if(input$smoothType== "Polynomial"){}
         return(Raspi_decoded2)
     })
     
@@ -420,14 +435,14 @@ server <- function(input, output) {
             my_data$time.min <- as.numeric(my_data$time.min)
             my_data$area.spl <- as.numeric(my_data$area.spl)
             Area_graph <- ggplot(data=my_data, aes(x= time.min, y=area.spl, group = Plant.ID, color = col.sorting)) 
-            Area_graph <- Area_graph + geom_line(alpha = 0.1) 
+            Area_graph <- Area_graph + geom_line(alpha = 0.3) 
             Area_graph <- Area_graph + ylab("Rosette Area (pixels)") + xlab("Time (minutes)")
         }
         if(input$expType == "PhenoCage"){
             my_data$time.days <- as.numeric(my_data$time.days)
             my_data$area.total.spl <- as.numeric(my_data$area.total.spl)
             Area_graph <- ggplot(data=my_data, aes(x= time.days, y=area.total.spl, group = POT, color = col.sorting)) 
-            Area_graph <- Area_graph + geom_line(alpha = 0.1) 
+            Area_graph <- Area_graph + geom_line(alpha = 0.3) 
             Area_graph <- Area_graph + ylab("Cummulative Shoot Area (pixels)") + xlab("Time (days)")
         }
         Area_graph
@@ -435,6 +450,28 @@ server <- function(input, output) {
     
     output$all_smooth_graph <- renderPlotly(
         ggplotly(smooth_graph_all())
+    )
+    
+    ########### download smooth graph ####################################  
+    
+    output$Smooth_graph_button <- renderUI({
+        if (is.null(smooth_graph_all())) {
+            return()
+        }
+        else{
+            downloadButton("smoothgraph_download_button", label = "Download plot")
+        }
+    })
+    
+    
+    output$smoothgraph_download_button <- downloadHandler(
+        filename = paste("Smoothed_data_graph.RasPiPhenoApp.pdf"),
+        content <- function(file) {
+            pdf(file)
+            plot(smooth_graph_all())
+            dev.off()
+            
+        }
     )
     
     # Calculating growth rate inputs
@@ -499,6 +536,7 @@ server <- function(input, output) {
                     max_time <- max(my_data$time.min)
                     if(input$step_size == "1 h"){step_time <- 60}
                     if(input$step_size == "6 h"){step_time <- 60*6}
+                    if(input$step_size == "12 h"){step_time <- 60*12}
                     if(input$step_size == "24 h"){step_time <- 60*24}
                     growth_timeline <- seq(min_time, max_time, by=step_time)
                     growth_timeline <- growth_timeline[-length(growth_timeline)]
@@ -1183,7 +1221,7 @@ server <- function(input, output) {
                     model_now <- lm(temp$area.total ~ temp$time.days)
                     GR <- model_now$coefficients[2]
                     R2 <- summary(model_now)$r.squared
-                    growth_data[1,1] <- temp_now$POT[1]
+                    growth_data[1,1] <- temp$POT[1]
                     growth_data[1,2] <- GR
                     growth_data[1,3] <- R2
                     for(i in 2:length(all_plants)){
@@ -1334,39 +1372,49 @@ server <- function(input, output) {
                 ))}
     })
     
+    output$Rhowlowui <- renderUI({
+        if(input$Rtoolow == FALSE){return()} else {
+            sliderInput("Rhowlow", label="Select R2 threshold", min = 0, max = 1, step = 0.05, value = 0.5)}
+    })
+    
+
     # # # # # # # # Growth rate graph  # # # # # # # # # # # # # # 
     
     Growth_rate_graph <- reactive(if(input$GoGrowth==FALSE){return(NULL)}else{
         my_data <- Growth_rate_table()
         my_data$GR <- as.numeric(as.character(my_data$GR))
         my_data$fill <- my_data[,input$ColorGrowth]
+        if(input$Rtoolow == TRUE){
+            my_data <- subset(my_data, my_data$R2 > as.numeric(input$Rhowlow))
+        }
+        
         if(input$GrowthType == "Over whole experiment"){
             my_data$Xaxis <- my_data[,input$XGrowth]
             if(input$expType == "PhenoRig"){
                 my_plot <- ggerrorplot(my_data, y="GR", x="Xaxis", fill="fill", color="fill",
                                        desc_stat = "mean_sd", add="jitter", add.params = list(color = "darkgray"),
                                        ylab="Growth Rate (pix / min)", xlab=input$XGrowth)
-            }
+                }
             if(input$expType == "PhenoCage"){
                 my_plot <- ggerrorplot(my_data, y="GR", x="Xaxis", fill="fill", color="fill",
                                        desc_stat = "mean_sd", add="jitter", add.params = list(color = "darkgray"),
                                        ylab="Growth Rate (pix / day)", xlab=input$XGrowth)
-            }}
+                }}
         if(input$GrowthType == "Step-wise"){
             if(input$expType == "PhenoRig"){
                 my_data$min <- as.numeric(as.character(my_data$min))
                 my_plot <- ggplot(data=my_data, aes(x= min, y=GR, group = Plant.ID, color = fill)) 
-                my_plot <- my_plot + geom_line(alpha = 0.1) 
-                my_plot <- my_plot + stat_summary(fun.data = mean_se, geom="ribbon", linetype=0, aes(group= fill), alpha=0.3)
-                my_plot <- my_plot + stat_summary(fun=mean, aes(group= fill),  size=0.7, geom="line", linetype = "dashed")
+                my_plot <- my_plot + geom_line(alpha = 0.3) 
+                #my_plot <- my_plot + stat_summary(fun.data = mean_se, geom="ribbon", linetype=0, aes(group= fill), alpha=0.3)
+                #my_plot <- my_plot + stat_summary(fun=mean, aes(group= fill),  size=0.7, geom="line", linetype = "dashed")
                 my_plot <- my_plot + ylab("Growth Rate (pix / min)") + xlab("time (min)")
             }
             if(input$expType == "PhenoCage"){
                 my_data$day <- as.numeric(as.character(my_data$day))
                 my_plot <- ggplot(data=my_data, aes(x= day, y=GR, group = POT, color = fill)) 
-                my_plot <- my_plot + geom_line(alpha = 0.1) 
-                my_plot <- my_plot + stat_summary(fun.data = mean_se, geom="ribbon", linetype=0, aes(group= fill), alpha=0.3)
-                my_plot <- my_plot + stat_summary(fun=mean, aes(group= fill),  size=0.7, geom="line", linetype = "dashed")
+                my_plot <- my_plot + geom_line(alpha = 0.3) 
+                #my_plot <- my_plot + stat_summary(fun.data = mean_se, geom="ribbon", linetype=0, aes(group= fill), alpha=0.3)
+                #my_plot <- my_plot + stat_summary(fun=mean, aes(group= fill),  size=0.7, geom="line", linetype = "dashed")
                 my_plot <- my_plot + ylab("Growth Rate (pix / day)") + xlab("time (days)")
             }
         }
@@ -1395,7 +1443,7 @@ server <- function(input, output) {
         filename = paste("GrowthRate_graph.RasPiPhenoApp.pdf"),
         content <- function(file) {
             pdf(file)
-            Growth_rate_graph()
+            plot(Growth_rate_graph())
             dev.off()
             
         }

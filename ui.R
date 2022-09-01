@@ -51,8 +51,9 @@ ui <- fluidPage(
   tabPanel("Data Smoothing", icon=icon("blender"),
            sidebarPanel(
              selectizeInput("smoothType", label = "What kind of smoothing would you like to use?",
-                            choices = c("SmoothSpline", "SomethingElse"), multiple=F),
-             sliderInput("degFree", label="How many degrees of freedom would you like to use?", min = 1, max=20, step = 1, value = 2),
+                            choices = c("SmoothSpline", "LowessFit", "Polynomial"), multiple=F),
+             uiOutput("degFreeUI"),
+             uiOutput("KnotesUI"),
              actionButton("SmoothGo", label = "Smooth all samples")
            ),
            mainPanel(navbarPage(
@@ -65,7 +66,8 @@ ui <- fluidPage(
                       dataTableOutput("Smooth_table")),
              tabPanel("smooth graph", icon=icon("cloud-sun"),
                       uiOutput("color_smooth"),
-                      plotlyOutput("all_smooth_graph"))
+                      plotlyOutput("all_smooth_graph"),
+                      uiOutput("Smooth_graph_button"))
              
            ))
            # end of Tab2
@@ -87,13 +89,15 @@ ui <- fluidPage(
                                 tabPanel("Growth Table",
                                          uiOutput("Growth_table_button"),
                                          dataTableOutput("Growth_table")),
-                                tabPanel("Growth Graph", 
-                                        uiOutput("Growth_Color_button"),
-                                        uiOutput("Growth_Xaxis"),
-                                        uiOutput("Growth_facet_check"),
-                                        uiOutput("Growth_facet"),
-                                        plotOutput("Growth_Graph"),
-                                        uiOutput("Growth_graph_button"))
+                                tabPanel("Growth Graph",
+                                         fluidRow(
+                                          column(4,uiOutput("Growth_Color_button")),
+                                          column(4, uiOutput("Growth_Xaxis")),
+                                          column(4, checkboxInput("Rtoolow", "Exclude samples with low R2"),
+                                                 uiOutput("Rhowlowui"))),
+                                          hr(),
+                                         plotOutput("Growth_Graph"),
+                                         uiOutput("Growth_graph_button"))
            ))
            # end of Tab3
   )
